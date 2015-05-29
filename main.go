@@ -81,9 +81,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	//bruteforce check
 	//first clear old rows
-	stmt, err = db.Prepare("delete from login_attempts where user_id=? and ?-time<600")
+stmt, err := db.Prepare("delete from login_attempts where user_id=? and ?-time<600")
 	chechErr(err, w)
-	res, err = stmt.Exec(user_id, int32(time.Now().Unix()))
+res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 	chechErr(err, w)
 
 	//check how many rows remain
