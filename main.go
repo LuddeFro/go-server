@@ -69,12 +69,12 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	// connect to DB
 	db, err := sql.Open("GQDB", "basicuser:kokanonaesostotorornonetot1@gqdb.cljdjugbpchc.eu-west-1.rds.amazonaws.com")
-	chechErr(err, w)
+	checkErr(err, w)
 	defer db.Close()
 
 	//check email exists in users
 	rows, err := db.Query("SELECT user_id, password FROM users WHERE email=? LIMIT 1")
-	chechErr(err, w)
+	checkErr(err, w)
 	n := 0
 	var user_id int
 	var hpwstring string
@@ -95,9 +95,9 @@ hpw := []byte(hpwstring)
 	//bruteforce check
 	//first clear old rows
 stmt, err := db.Prepare("delete from login_attempts where user_id=? and ?-time<600")
-	chechErr(err, w)
+	checkErr(err, w)
 res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
-	chechErr(err, w)
+	checkErr(err, w)
 
 	//check how many rows remain
 	rows2, err2 := db.Query("SELECT * FROM login_attempts WHERE user_id=?")
@@ -123,9 +123,9 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 		//password mismatch
 		//insert entry in login_attempts
 		stmt, err := db.Prepare("INSERT login_attempts SET user_id=?,time=?")
-		chechErr(err, w)
+		checkErr(err, w)
 		res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
-		chechErr(err, w)
+		checkErr(err, w)
 
 		//return error
 		response := Response{
@@ -139,14 +139,14 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 	//login info valid
 	//clear bruteforce
 	stmt, err = db.Prepare("delete from login_attempts where user_id=?")
-	chechErr(err, w)
+	checkErr(err, w)
 	res, err = stmt.Exec(user_id)
-	chechErr(err, w)
+	checkErr(err, w)
 
 	//generate st
 	st := []byte(randSeq(32))
 	hst, err := bcrypt.GenerateFromPassword(st, 11)
-	chechErr(err, w)
+	checkErr(err, w)
 
 	//update appropriate tables and give appropriate response
 	table := ""
@@ -167,20 +167,20 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 			//is computer
 			buffer.WriteString(" SET user_id=?,status=?,game=?,q_time=?,session_token=?")
 			stmt, err := db.Prepare(buffer.String())
-			chechErr(err, w)
+			checkErr(err, w)
 			res, err := stmt.Exec(user_id, 0, 0, 0, hst)
-			chechErr(err, w)
+			checkErr(err, w)
 			di, err := res.LastInsertId()
-			chechErr(err, w)
+			checkErr(err, w)
 		} else {
 			//is mobile, insert push token
 			buffer.WriteString(" SET user_id=?,push_token=?,session_token=?")
 			stmt, err := db.Prepare(buffer.String())
-			chechErr(err, w)
+			checkErr(err, w)
 			res, err := stmt.Exec(user_id, pt, hst)
-			chechErr(err, w)
+			checkErr(err, w)
 			di, err := res.LastInsertId()
-			chechErr(err, w)
+			checkErr(err, w)
 		}
 		// return device id, session token and success
 		response := Response{
@@ -198,16 +198,16 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 			//is computer
 			buffer.WriteString(" SET user_id=?,status=?,game=?,q_time=?,session_token=? WHERE device_id=?")
 			stmt, err := db.Prepare(buffer.String())
-			chechErr(err, w)
+			checkErr(err, w)
 			res, err := stmt.Exec(user_id, 0, 0, 0, hst, di)
-			chechErr(err, w)
+			checkErr(err, w)
 		} else {
 			//is mobile, insert push token
 			buffer.WriteString(" SET user_id=?,push_token=?,session_token=? WHERE device_id=?")
 			stmt, err := db.Prepare(buffer.String())
-			chechErr(err, w)
+			checkErr(err, w)
 			res, err := stmt.Exec(user_id, pt, hst, di)
-			chechErr(err, w)
+			checkErr(err, w)
 		}
 		// return device id, session token and success
 		response := Response{
@@ -275,15 +275,15 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	if sys == "computer" {
 		buffer.WriteString(" SET user_id=?, session_token=?, status=?, game=?, q_time=? WHERE device_id=?")
 		stmt, err := db.Prepare(buffer.String())
-		chechErr(err, w)
+		checkErr(err, w)
 		res, err := stmt.Exec(nil, "", 0, 0, 0, di)
-		chechErr(err, w)
+		checkErr(err, w)
 	} else {
 		buffer.WriteString(" SET user_id=?, session_token=?, push_token=? WHERE device_id=?")
 		stmt, err := db.Prepare(buffer.String())
-		chechErr(err, w)
+		checkErr(err, w)
 		res, err := stmt.Exec(nil, "", "", di)
-		chechErr(err, w)
+		checkErr(err, w)
 	}
 	response := Response{
 		Success: 1,
@@ -303,12 +303,12 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	// connect to DB
 	db, err := sql.Open("GQDB", "basicuser:kokanonaesostotorornonetot1@gqdb.cljdjugbpchc.eu-west-1.rds.amazonaws.com")
-	chechErr(err, w)
+	checkErr(err, w)
 	defer db.Close()
 
 	//check email exists in users
 	rows, err := db.Query("SELECT * FROM users WHERE email=? LIMIT 1")
-	chechErr(err, w)
+	checkErr(err, w)
 	n := 0
 	var password string
 	for rows.Next() {
@@ -333,7 +333,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	//generate st and hst
 	st := randSeq(32)
 	hst, err := bcrypt.GenerateFromPassword(st, 11)
-	chechErr(err, w)
+	checkErr(err, w)
 
 	//insert entry to users
 	stmt, err := db.Prepare("INSERT users SET email=?,password=?")
@@ -341,7 +341,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	res1, err := stmt.Exec(em, hpw)
 	checkErr(err, w)
 	user_id, err := res1.LastInsertId()
-	chechErr(err, w)
+	checkErr(err, w)
 
 	//update appropriate tables as if logging in and give appropriate response
 	table := ""
@@ -362,20 +362,20 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			//is computer
 			buffer.WriteString(" SET user_id=?,status=?,game=?,q_time=?,session_token=?")
 			stmt, err := db.Prepare(buffer.String())
-			chechErr(err, w)
+			checkErr(err, w)
 			res, err := stmt.Exec(user_id, 0, 0, 0, hst)
-			chechErr(err, w)
+			checkErr(err, w)
 			di, err := res.LastInsertId()
-			chechErr(err, w)
+			checkErr(err, w)
 		} else {
 			//is mobile, insert push token
 			buffer.WriteString(" SET user_id=?,push_token=?,session_token=?")
 			stmt, err := db.Prepare(buffer.String())
-			chechErr(err, w)
+			checkErr(err, w)
 			res, err := stmt.Exec(user_id, pt, hst)
-			chechErr(err, w)
+			checkErr(err, w)
 			di, err := res.LastInsertId()
-			chechErr(err, w)
+			checkErr(err, w)
 		}
 		// return device id, session token and success
 		response := Response{
@@ -393,16 +393,16 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			//is computer
 			buffer.WriteString(" SET user_id=?,status=?,game=?,q_time=?,session_token=? WHERE device_id=?")
 			stmt, err := db.Prepare(buffer.String())
-			chechErr(err, w)
+			checkErr(err, w)
 			res, err := stmt.Exec(user_id, 0, 0, 0, hst, di)
-			chechErr(err, w)
+			checkErr(err, w)
 		} else {
 			//is mobile, insert push token
 			buffer.WriteString(" SET user_id=?,push_token=?,session_token=? WHERE device_id=?")
 			stmt, err := db.Prepare(buffer.String())
-			chechErr(err, w)
+			checkErr(err, w)
 			res, err := stmt.Exec(user_id, pt, hst, di)
-			chechErr(err, w)
+			checkErr(err, w)
 		}
 		// return device id, session token and success
 		response := Response{
