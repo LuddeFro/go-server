@@ -142,7 +142,7 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 		table = "iphones"
 	} else if sys == "android" {
 		table = "androids"
-	} else if sys == computer {
+	} else if sys == "computer" {
 		table = "computers"
 	}
 	var buffer bytes.Buffer
