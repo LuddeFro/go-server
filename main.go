@@ -68,7 +68,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	var hpwstring string
 	for rows.Next() {
 		n++
-		err = rows.Scan(&user_id, &password)
+		err = rows.Scan(&user_id, &hpwstring)
 	}
 	if n == 0 {
 		response := Response{
@@ -298,7 +298,6 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query("SELECT * FROM users WHERE email=? LIMIT 1")
 	chechErr(err, w)
 	n := 0
-	var user_id int
 	var password string
 	for rows.Next() {
 		n++
