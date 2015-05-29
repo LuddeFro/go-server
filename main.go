@@ -21,10 +21,10 @@ func checkErr(err error, w http.ResponseWriter) {
 if err != nil {
 response := Response{
 Success: 0,
-Error:   err,
+Error:   err.Error(),
 }
 json.NewEncoder(w).Encode(response)
-panic()
+panic(err.Error())
 }
 }
 
@@ -255,10 +255,10 @@ func checkSession(di string, st string, sys string) (err error, uid string) {
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	di, err, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)
+	di, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)
 	st := r.Form.Get("session_token")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
-	err := checkSession(di, st, sys)
+	err = checkSession(di, st, sys)
 	checkErr(err, w)
 	//fmt.Fprintf(w, "di: %s, st: %s, sys: %s", di, st, sys)
 	var buffer bytes.Buffer
