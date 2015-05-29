@@ -65,7 +65,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	chechErr(err, w)
 	n := 0
 	var user_id int
-	var password string
+	var hpwstring string
 	for rows.Next() {
 		n++
 		err = rows.Scan(&user_id, &password)
@@ -78,6 +78,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+hpw := []byte(hpwstring)
 
 	//bruteforce check
 	//first clear old rows
@@ -88,7 +89,7 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 
 	//check how many rows remain
 	rows2, err2 := db.Query("SELECT * FROM login_attempts WHERE user_id=?")
-	checkErr(err2)
+	checkErr(err2, w)
 	n2 := 0
 	for rows2.Next() {
 		n2++
@@ -105,7 +106,7 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 	}
 
 	//check password
-	erro := bcrypt.CompareHashAndPassword(hashedPassword, password)
+	erro := bcrypt.CompareHashAndPassword(hpw, pw)
 	if erro != nil {
 		//password mismatch
 		//insert entry in login_attempts
