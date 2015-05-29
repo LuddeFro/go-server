@@ -185,8 +185,8 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 		// return device id, session token and success
 		response := Response{
 			Success:       1,
-			Device_id:     di,
-			Session_Token: st,
+			Device_id:     int(di),
+			Session_token: st,
 		}
 		json.NewEncoder(w).Encode(response)
 
@@ -212,7 +212,7 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 		// return device id, session token and success
 		response := Response{
 			Success:       1,
-			Session_Token: st,
+			Session_token: st,
 		}
 		json.NewEncoder(w).Encode(response)
 	}
@@ -220,7 +220,8 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 	//returned Optional(device_id), success, Optional(error), session_token
 }
 
-func checkSession(di string, st string, sys string) (err error, uid string) {
+func checkSession(di string, s_t string, sys string) (err error, uid string) {
+st := []byte(s_t)
 	db, err := sql.Open("GQDB", "basicuser:kokanonaesostotorornonetot1@gqdb.cljdjugbpchc.eu-west-1.rds.amazonaws.com")
 	defer db.Close()
 	var table string
@@ -233,22 +234,23 @@ func checkSession(di string, st string, sys string) (err error, uid string) {
 	}
 	qry := "SELECT session_token, user_id FROM " + table + " WHERE device_id=?"
 	rows, err := db.Query(qry, di)
-	checkErr(err)
+	checkErr(err, w)
 
-	var hst string
+	var hststring string
 	var u_id int
 	for rows.Next() {
 		err = rows.Scan(&hst, &u_id)
-		checkErr(err)
+		checkErr(err, w)
 
 	}
+hst := []byte(hststring)
 	err = bcrypt.CompareHashAndPassword(hst, st)
 	if err == nil {
 		//st match
-		return nil, u_id
+		return nil, strconv.FormatInt(int64(u_id), 10)
 	} else {
 		//st mismatch
-		return err, u_id
+		return err, strconv.FormatInt(int64(u_id), 10)
 	}
 
 }
@@ -258,7 +260,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	di, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)
 	st := r.Form.Get("session_token")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
-	err = checkSession(di, st, sys)
+	err = checkSession(int(di), st, sys)
 	checkErr(err, w)
 	//fmt.Fprintf(w, "di: %s, st: %s, sys: %s", di, st, sys)
 	var buffer bytes.Buffer
