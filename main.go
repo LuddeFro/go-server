@@ -51,7 +51,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	em := r.Form.Get("email")
 	pw := []byte(r.Form.Get("password"))
-	di := strconv.ParseInt(r.Form.Get("device_id"),10,0)    //optional
+	di, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)    //optional
 	pt := r.Form.Get("push_token") //only mobile
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
 	//fmt.Fprintf(w, "user: %s, pwd: %s, di: %s, pt: %s, sys: %s", em, pw, di, pt, sys)
@@ -244,7 +244,7 @@ func checkSession(di string, st string, sys string) (err error, uid string) {
 
 func handleLogout(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	di := strconv.ParseInt(r.Form.Get("device_id"),10,0)
+	di, err, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)
 	st := r.Form.Get("session_token")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
 	err := checkSession(di, st, sys)
@@ -285,7 +285,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	em := r.Form.Get("email")
 	pw := []byte(r.Form.Get("password"))
-	di := strconv.ParseInt(r.Form.Get("device_id"),10,0)  //optional
+	di, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)  //optional
 	pt := r.Form.Get("push_token") //only mobile
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
 	//fmt.Fprintf(w, "user: %s, pwd: %s, di: %s, pt: %s, sys: %s", em, pw, di, pt, sys)
@@ -405,10 +405,10 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	sa := strconv.ParseInt(r.Form.Get("status"),10,0)
+	sa, err := strconv.ParseInt(r.Form.Get("status"),10,0)
 	st := r.Form.Get("session_token")
-	di := strconv.ParseInt(r.Form.Get("device_id"),10,0)
-	gm := strconv.ParseInt(r.Form.Get("game"),10,0) //optional
+	di, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)
+	gm, err := strconv.ParseInt(r.Form.Get("game"),10,0) //optional
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
 
 	//fmt.Fprintf(w, "status: %s, st: %s, di: %s, gm: %s", sa, st, di, gm)
@@ -436,7 +436,7 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 
 func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	di := strconv.ParseInt(r.Form.Get("device_id"),10,0)
+	di, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)
 	st := r.Form.Get("session_token")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
 	//fmt.Fprintf(w, "di: %s, st: %s, sys: %s", di, st, sys)
@@ -479,7 +479,7 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 func handleUpdateToken(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	st := r.Form.Get("session_token")
-	di := strconv.ParseInt(r.Form.Get("device_id"),10,0)
+	di, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)
 	pt := r.Form.Get("push_token")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
 	//fmt.Fprintf(w, "st: %s, di: %s, pt: %s, sys: %s", st, di, pt, sys)
@@ -515,9 +515,9 @@ func handleUpdateToken(w http.ResponseWriter, r *http.Request) {
 
 func handlePush(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	di := strconv.ParseInt(r.Form.Get("device_id"),10,0)
+	di, err := strconv.ParseInt(r.Form.Get("device_id"),10,0)
 	st := r.Form.Get("session_token")
-	gm := strconv.ParseInt(r.Form.Get("game"),10,0)
+	gm, err := strconv.ParseInt(r.Form.Get("game"),10,0)
 	ab := r.Form.Get("accept_before")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
 
