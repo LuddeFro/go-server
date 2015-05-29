@@ -132,7 +132,7 @@ res, err := stmt.Exec(user_id, int32(time.Now().Unix()))
 	chechErr(err, w)
 
 	//generate st
-	st := randSeq(32)
+	st := []byte(randSeq(32))
 	hst, err := bcrypt.GenerateFromPassword(st, 11)
 	chechErr(err, w)
 
