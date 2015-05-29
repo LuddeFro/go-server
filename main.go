@@ -17,6 +17,17 @@ import (
     "strconv"
 )
 
+func checkErr(err error, w http.ResponseWriter) {
+if err != nil {
+response := Response{
+Success: 0,
+Error:   err,
+}
+json.NewEncoder(w).Encode(response)
+panic()
+}
+}
+
 func handle404(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "(404) Hi there, I love %s! Unfortunately, I couldn't find it :/", r.URL.Path[1:])
 }
@@ -635,16 +646,7 @@ func handleVersionControl(w http.ResponseWriter, r *http.Request) {
 	//returned success, Optional(error)
 }
 
-func checkErr(err error, w http.ResponseWriter) {
-	if err != nil {
-		response := Response{
-			Success: 0,
-			Error:   err,
-		}
-		json.NewEncoder(w).Encode(response)
-		panic()
-	}
-}
+
 
 //crypto
 /*
