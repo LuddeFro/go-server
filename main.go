@@ -659,7 +659,7 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 
 	response := Response{
 		Success: 1,
-		IP, myip,
+		IP:      myip,
 	}
 	json.NewEncoder(w).Encode(response)
 	//return success, Optional(error)
