@@ -667,7 +667,7 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := Response{
+	response = Response{
 		Success: 1,
 	}
 	json.NewEncoder(w).Encode(response)
