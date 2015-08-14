@@ -737,7 +737,7 @@ func handleAccept(w http.ResponseWriter, r *http.Request) {
 	di, err := strconv.ParseInt(r.Form.Get("device_id"), 10, 0)
 	st := r.Form.Get("session_token")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
-	acc, err := strconv.ParseInt(r.Form.Get("device_id"), 10, 0)
+	acc, err := strconv.ParseInt(r.Form.Get("accept"), 10, 0)
 
 	//check session
 	err, user_id := checkSession(int(di), st, sys, w)
@@ -1514,6 +1514,8 @@ func main() {
 	http.HandleFunc("/android/forgotPassword", handleForgotPassword)
 	http.HandleFunc("/computer/forgotPassword", handleForgotPassword)
 	http.HandleFunc("/ios/forgotPassword", handleForgotPassword)
+	http.HandleFunc("/ios/accept", handleAccept)
+	http.HandleFunc("/android/accept", handleAccept)
 
 	http.HandleFunc("/test/push", handleTestPush)
 
