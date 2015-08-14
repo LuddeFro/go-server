@@ -966,10 +966,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 
 				_ = client.Send(pn)
 				//smths := smth.
-				response := Response{
-					Success: 1,
-				}
-				json.NewEncoder(w).Encode(response)
+
 				/*
 				   alert, _ := pn.PayloadString()
 				   fmt.Println("  Alert:", alert)
@@ -987,12 +984,6 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 		return
 	}
 	for rows2.Next() {
-
-		responsee := Response{
-			Success: 1,
-			Error:   "Android",
-		}
-		json.NewEncoder(w).Encode(responsee)
 
 		var token string
 		err = rows2.Scan(&token)
@@ -1025,6 +1016,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 	if aa != 0 {
 		aaS = "auto"
 	} else {
+		aaS = "nonauto "
 		ch := make(chan string)
 		channels[user_id] = ch
 		timeout := time.After(time.Duration(maxwait) * time.Second)
