@@ -69,6 +69,7 @@ type Response struct {
 	Status          int    `json:"status,omitempty"`
 	Accept_before   int    `json:"accept_before,omitempty"`
 	Time            int32  `json:"time,omitempty"`
+	IP              string `json:"ip,omitempty"`
 }
 
 var letters = []rune("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -624,12 +625,12 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//update status
-	stmt, err := db.Prepare("update computers set status=?, game=?, status_timestamp=? where device_id=?")
+	stmt, err := db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON(`?`) where device_id=?")
 	if !checkErr(err, w) {
 		return
 	}
 
-	_, err = stmt.Exec(sa, gm, int32(time.Now().Unix()), di)
+	_, err = stmt.Exec(sa, gm, int32(time.Now().Unix()), myip, di)
 	if !checkErr(err, w) {
 		return
 	}
@@ -680,7 +681,7 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query("SELECT game, status, status_timestamp FROM computers WHERE user_id=? LIMIT 1", user_id)
+	rows, err := db.Query("SELECT game, status, status_timestamp, INET_NTOA(`status_ip`) FROM computers WHERE user_id=? LIMIT 1", user_id)
 	if !checkErr(err, w) {
 		return
 	}
@@ -695,7 +696,8 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 			var status int
 			var game int
 			var timestamp int32
-			err = rows.Scan(&game, &status, &timestamp)
+			var ip string
+			err = rows.Scan(&game, &status, &timestamp, &ip)
 			if !checkErr(err, w) {
 				return
 			}
@@ -716,6 +718,7 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 					Game:          game,
 					Status:        status,
 					Accept_before: ab,
+					IP:            ip,
 				}
 			}
 		}
@@ -724,6 +727,44 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 
 	//return success, Optional(error), status, Optional(game)
+}
+
+func handleAccept(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	if !checkKey(r.Form.Get("key"), w) {
+		return
+	}
+	di, err := strconv.ParseInt(r.Form.Get("device_id"), 10, 0)
+	st := r.Form.Get("session_token")
+	sys := strings.Split(r.URL.Path[1:], "/")[0]
+	acc, err := strconv.ParseInt(r.Form.Get("device_id"), 10, 0)
+
+	//check session
+	err, user_id := checkSession(int(di), st, sys, w)
+	if !checkErr(err, w) {
+		return
+	}
+	_, ok := channels[user_id]
+	if !ok {
+		resp := Response{
+			Success: 0,
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+	if acc != 0 {
+		//accept
+		channels[user_id] <- "accept"
+	} else {
+		//decline
+		channels[user_id] <- "decline"
+	}
+
+	//fmt.Fprintf(w, "di: %s, st: %s, sys: %s", di, st, sys)
+	resp := Response{
+		Success: 1,
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 func handleUpdateToken(w http.ResponseWriter, r *http.Request) {
@@ -850,6 +891,8 @@ func handleGetAutoAccept(w http.ResponseWriter, r *http.Request) {
 func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int) {
 	var ab int32
 	ab = 0
+	var maxwait int
+	maxwait = 0
 	gamestring := "Matchmaking"
 	switch {
 	case g == 0:
@@ -858,12 +901,14 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 	case g == 1:
 		gamestring = "Dota2"
 		ab = int32(time.Now().Unix()) + 45
+		maxwait = 45
 		break
 	case g == 2:
 		gamestring = "HoN"
 		break
 	case g == 3:
 		gamestring = "CS:GO"
+		maxwait = 20
 		ab = int32(time.Now().Unix()) + 20
 		break
 	case g == 4:
@@ -871,6 +916,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 		break
 	case g == 5:
 		gamestring = "LoL"
+		maxwait = 10
 		ab = int32(time.Now().Unix()) + 10
 		break
 	case g > 5 || g < 0:
@@ -878,7 +924,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 		break
 	}
 
-	//pusb to all iPhones
+	//push to all iPhones
 	rows, err := db.Query("SELECT push_token FROM iphones WHERE user_id=?", user_id)
 	if !checkErr(err, w) {
 		return
@@ -902,6 +948,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 				pn.DeviceToken = token
 
 				pn.Set("accept_before", ab)
+				pn.Set("ip", myip)
 				//DEVELOPMENT
 				//client := apns.NewClient("gateway.sandbox.push.apple.com:2195", "/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Cert.pem", "/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Key-Unencrypted.pem")
 				//PRODUCTION
@@ -973,10 +1020,21 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 
 	}
 	var aaS string
+
 	if aa != 0 {
-		aaS = "accept"
+		aaS = "auto"
 	} else {
-		aaS = ""
+		ch := make(chan string)
+		channels[user_id] = ch
+		timeout := time.After(time.Duration(maxwait) * time.Second)
+		select {
+		case r := <-ch:
+			aaS = r
+		case <-timeout:
+			aaS = "accept response timeout"
+		}
+		delete(channels, user_id)
+		close(ch)
 	}
 	response := Response{
 		Success: 1,
@@ -1405,6 +1463,8 @@ fmt.Println(affect)
 */
 
 var db *sql.DB
+var myip string
+var channels = make(map[int]chan string)
 
 func DbConnect() *sql.DB {
 
@@ -1420,6 +1480,7 @@ func main() {
 
 	db = DbConnect()
 	db.SetMaxIdleConns(1000)
+	myip = getPublicIP()
 
 	http.HandleFunc("/", handle404)
 	http.HandleFunc("/computer/login", handleLogin)
@@ -1459,12 +1520,26 @@ func main() {
 	s := &http.Server{
 		Addr:           ":8080",
 		Handler:        nil,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
+		ReadTimeout:    60 * time.Second,
+		WriteTimeout:   60 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
 	log.Fatal(s.ListenAndServe())
 
+}
+
+func getPublicIP() string {
+	resp, err := http.Get("http://myexternalip.com/raw")
+	if err != nil {
+		os.Stderr.WriteString(err.Error())
+		os.Stderr.WriteString("\n")
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
+	s := buf.String()
+	return s
 }
 
 func handleTestPush(w http.ResponseWriter, r *http.Request) {
