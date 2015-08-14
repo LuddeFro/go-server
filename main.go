@@ -625,7 +625,7 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//update status
-	stmt, err := db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON(?) where device_id=?")
+	stmt, err := db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON('?') where device_id=?")
 	if !checkErr(err, w) {
 		return
 	}
