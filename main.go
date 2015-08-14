@@ -1541,7 +1541,7 @@ func getPublicIP() string {
 	defer resp.Body.Close()
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
-	s := buf.String()
+	s := strings.TrimSpace(buf.String())
 	return s
 }
 
