@@ -627,18 +627,8 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 	//update status
 	stmt, err := db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON('" + myip + "') where device_id=?")
 	if !checkErr(err, w) {
-		response := Response{
-			Success: 0,
-			Error:   "vafan",
-		}
-		json.NewEncoder(w).Encode(response)
 		return
 	}
-	response := Response{
-		Success: 0,
-		Error:   "nee men sluta",
-	}
-	json.NewEncoder(w).Encode(response)
 
 	_, err = stmt.Exec(sa, gm, int32(time.Now().Unix()), di)
 	if !checkErr(err, w) {
@@ -667,7 +657,7 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response = Response{
+	response := Response{
 		Success: 1,
 	}
 	json.NewEncoder(w).Encode(response)
