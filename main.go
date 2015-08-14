@@ -625,12 +625,12 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//update status
-	stmt, err := db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON('?') where device_id=?")
+	stmt, err := db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON('" + myip + "') where device_id=?")
 	if !checkErr(err, w) {
 		return
 	}
 
-	_, err = stmt.Exec(sa, gm, int32(time.Now().Unix()), myip, di)
+	_, err = stmt.Exec(sa, gm, int32(time.Now().Unix()), di)
 	if !checkErr(err, w) {
 		return
 	}
