@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/alexjlockwood/gcm"
 	apns "github.com/anachronistic/apns"
@@ -112,8 +113,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "connected to DB")
 
 	//check email exists in users
-	rows, err := db.Query("SELECT user_id, password FROM users WHERE email=? LIMIT 1", em)
-	//fmt.Fprintf(w, "%s", rows)
+	rows, err := stmtSelectCredentials.Query(em)
 	if !checkErr(err, w) {
 		return
 	}
@@ -145,18 +145,14 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	//bruteforce check
 	//first clear old rows
-	stmt, err := db.Prepare("delete from login_attempts where user_id=? and ?-time>600")
-	if !checkErr(err, w) {
-		return
-	}
-	_, err = stmt.Exec(user_id, int32(time.Now().Unix()))
+	_, err = stmtClearLoginAttempt.Exec(user_id, int32(time.Now().Unix()))
 	if !checkErr(err, w) {
 		return
 	}
 	//fmt.Fprintf(w, "pw:%s di:%s pt:%s sys:%s hpw:%s", pw, di, pt, sys, hpw)
 
 	//check how many rows remain
-	rows2, err2 := db.Query("SELECT * FROM login_attempts WHERE user_id=?", user_id)
+	rows2, err2 := stmtGetLoginAttempts.Query(user_id)
 	checkErr(err2, w)
 	n2 := 0
 	if rows2 != nil {
@@ -184,11 +180,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	if erro != nil {
 		//password mismatch
 		//insert entry in login_attempts
-		stmt, err := db.Prepare("INSERT login_attempts SET user_id=?,time=?")
-		if !checkErr(err, w) {
-			return
-		}
-		_, err = stmt.Exec(user_id, int32(time.Now().Unix()))
+
+		_, err = stmtInsertLoginAttempt.Exec(user_id, int32(time.Now().Unix()))
 		if !checkErr(err, w) {
 			return
 		}
@@ -212,39 +205,18 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//update appropriate tables and give appropriate response
-	table := ""
-	if sys == "ios" {
-		table = "iphones"
-	} else if sys == "android" {
-		table = "androids"
-	} else if sys == "computer" {
-		table = "computers"
-	}
-	var buffer bytes.Buffer
 
 	if di == 0 {
 		//insert new entry
-		buffer.WriteString("INSERT ")
-		buffer.WriteString(table)
 		if sys == "computer" {
 			//is computer
 
-			stmt, err := db.Prepare("update computers set user_id=?, session_token=? where user_id=?")
+			_, err = stmtUpdateSession.Exec(nil, "", user_id)
 			if !checkErr(err, w) {
 				return
 			}
 
-			_, err = stmt.Exec(nil, "", user_id)
-			if !checkErr(err, w) {
-				return
-			}
-
-			buffer.WriteString(" SET user_id=?,status=?,game=?,session_token=?")
-			stmt, err = db.Prepare(buffer.String())
-			if !checkErr(err, w) {
-				return
-			}
-			res, err := stmt.Exec(user_id, 0, 0, hst)
+			res, err := stmtInsertComputer.Exec(user_id, 0, 0, hst)
 			if !checkErr(err, w) {
 				return
 			}
@@ -253,23 +225,20 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			//is mobile, insert push token
-			stmt, err := db.Prepare("update " + table + " set user_id=?, session_token=?, push_token=? where push_token=?")
+			var upMobileWithPT *sql.Stmt
+			var insertMobile *sql.Stmt
+			if sys == "android" {
+				upMobileWithPT = stmtUpdateAndroidWithPT
+				insertMobile = stmtInsertAndroid
+			} else if sys == "ios" {
+				upMobileWithPT = stmtUpdateIphoneWithPT
+				insertMobile = stmtInsertIphone
+			}
+			_, err = upMobileWithPT.Exec(nil, "", "", pt)
 			if !checkErr(err, w) {
 				return
 			}
-
-			_, err = stmt.Exec(nil, "", "", pt)
-			if !checkErr(err, w) {
-				return
-			}
-
-			buffer.WriteString(" SET user_id=?,push_token=?,session_token=?")
-			stmt, err = db.Prepare(buffer.String())
-			if !checkErr(err, w) {
-				return
-			}
-			res, err := stmt.Exec(user_id, pt, hst)
+			res, err := insertMobile.Exec(user_id, pt, hst)
 			if !checkErr(err, w) {
 				return
 			}
@@ -289,38 +258,27 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	} else {
 		//device has entry already, update existing
-		buffer.WriteString("UPDATE ")
-		buffer.WriteString(table)
 		if sys == "computer" {
 			//is computer
 			//log out other computers
-			stmt, err := db.Prepare("update computers set user_id=?, session_token=? where user_id=?")
-			if !checkErr(err, w) {
-				return
-			}
 
-			_, err = stmt.Exec(nil, "", user_id)
+			_, err = stmtUpdateSession.Exec(nil, "", user_id)
 			if !checkErr(err, w) {
 				return
 			}
-
-			buffer.WriteString(" SET user_id=?,status=?,game=?,session_token=? WHERE device_id=?")
-			stmt, err = db.Prepare(buffer.String())
-			if !checkErr(err, w) {
-				return
-			}
-			_, err = stmt.Exec(user_id, 0, 0, hst, di)
+			_, err = stmtUpdateComputer.Exec(user_id, 0, 0, hst, di)
 			if !checkErr(err, w) {
 				return
 			}
 		} else {
-			//is mobile, insert push token
-			buffer.WriteString(" SET user_id=?,push_token=?,session_token=? WHERE device_id=?")
-			stmt, err := db.Prepare(buffer.String())
-			if !checkErr(err, w) {
-				return
+			var stmtUpdateMobile *sql.Stmt
+			if sys == "android" {
+				stmtUpdateMobile = stmtUpdateAndroid
+			} else if sys == "ios" {
+				stmtUpdateMobile = stmtUpdateIphone
 			}
-			_, err = stmt.Exec(user_id, pt, hst, di)
+
+			_, err = stmtUpdateMobile.Exec(user_id, pt, hst, di)
 			if !checkErr(err, w) {
 				return
 			}
@@ -339,17 +297,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func checkSession(di int, s_t string, sys string, w http.ResponseWriter) (err error, uid int) {
 	st := []byte(s_t)
-	var table string
+	var stmtCheckSess *sql.Stmt
 	if sys == "ios" {
-		table = "iphones"
+		stmtCheckSess = stmtCheckIphoneSession
 	} else if sys == "android" {
-		table = "androids"
+		stmtCheckSess = stmtCheckAndroidSession
 	} else if sys == "computer" {
-		table = "computers"
+		stmtCheckSess = stmtCheckComputerSession
 	}
 
-	qry := "SELECT session_token, user_id FROM " + table + " WHERE device_id=?"
-	rows, err := db.Query(qry, di)
+	rows, err := stmtCheckSess.Query(di)
 	if !checkErr(err, w) {
 		return err, 0
 	}
@@ -373,7 +330,8 @@ func checkSession(di int, s_t string, sys string, w http.ResponseWriter) (err er
 		return nil, u_id
 	} else {
 		//st mismatch
-		return err, u_id
+		//return err, u_id
+		return errors.New("missing session"), u_id
 	}
 
 }
@@ -390,33 +348,21 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	if !checkErr(err, w) {
 		return
 	}
-	//fmt.Fprintf(w, "di: %s, st: %s, sys: %s", di, st, sys)
-	var buffer bytes.Buffer
-	buffer.WriteString("UPDATE ")
+
 	if sys == "computer" {
-		buffer.WriteString("computers")
-	} else if sys == "ios" {
-		buffer.WriteString("iphones")
-	} else if sys == "android" {
-		buffer.WriteString("androids")
-	}
-	if sys == "computer" {
-		buffer.WriteString(" SET user_id=?, session_token=?, status=?, game=? WHERE device_id=?")
-		stmt, err := db.Prepare(buffer.String())
-		if !checkErr(err, w) {
-			return
-		}
-		_, err = stmt.Exec(nil, "", 0, 0, di)
+
+		_, err = stmtUpdateComputer.Exec(nil, 0, 0, "", di)
 		if !checkErr(err, w) {
 			return
 		}
 	} else {
-		buffer.WriteString(" SET user_id=?, session_token=?, push_token=? WHERE device_id=?")
-		stmt, err := db.Prepare(buffer.String())
-		if !checkErr(err, w) {
-			return
+		var stmtUpdateMobile *sql.Stmt
+		if sys == "ios" {
+			stmtUpdateMobile = stmtUpdateIphone
+		} else if sys == "android" {
+			stmtUpdateMobile = stmtUpdateAndroid
 		}
-		_, err = stmt.Exec(nil, "", "", di)
+		_, err = stmtUpdateMobile.Exec(nil, "", "", di)
 		if !checkErr(err, w) {
 			return
 		}
@@ -452,7 +398,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "user: %s, pwd: %s, di: %s, pt: %s, sys: %s", em, pw, di, pt, sys)
 
 	//check email exists in users
-	rows, err := db.Query("SELECT * FROM users WHERE email=? LIMIT 1", em)
+	rows, err := stmtCheckEmailExists.Query(em)
 	if !checkErr(err, w) {
 		return
 	}
@@ -490,11 +436,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//insert entry to users
-	stmt, err := db.Prepare("INSERT users SET email=?,password=?")
-	if !checkErr(err, w) {
-		return
-	}
-	res1, err := stmt.Exec(em, hpw)
+	res1, err := stmtInsertUser.Exec(em, hpw)
 	if !checkErr(err, w) {
 		return
 	}
@@ -504,28 +446,17 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//update appropriate tables as if logging in and give appropriate response
-	table := ""
-	if sys == "ios" {
-		table = "iphones"
-	} else if sys == "android" {
-		table = "androids"
-	} else if sys == "computer" {
-		table = "computers"
-	}
-	var buffer bytes.Buffer
-
 	if di == 0 {
 		//insert new entry
-		buffer.WriteString("INSERT ")
-		buffer.WriteString(table)
 		if sys == "computer" {
 			//is computer
-			buffer.WriteString(" SET user_id=?,status=?,game=?,session_token=?")
-			stmt, err := db.Prepare(buffer.String())
+
+			_, err = stmtUpdateSession.Exec(nil, "", user_id)
 			if !checkErr(err, w) {
 				return
 			}
-			res, err := stmt.Exec(user_id, 0, 0, hst)
+
+			res, err := stmtInsertComputer.Exec(user_id, 0, 0, hst)
 			if !checkErr(err, w) {
 				return
 			}
@@ -534,23 +465,20 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		} else {
-			//is mobile, insert push token
-			stmt, err := db.Prepare("update " + table + " set user_id=?, session_token=?, push_token=? where push_token=?")
+			var upMobileWithPT *sql.Stmt
+			var insertMobile *sql.Stmt
+			if sys == "android" {
+				upMobileWithPT = stmtUpdateAndroidWithPT
+				insertMobile = stmtInsertAndroid
+			} else if sys == "ios" {
+				upMobileWithPT = stmtUpdateIphoneWithPT
+				insertMobile = stmtInsertIphone
+			}
+			_, err = upMobileWithPT.Exec(nil, "", "", pt)
 			if !checkErr(err, w) {
 				return
 			}
-
-			_, err = stmt.Exec(nil, "", "", pt)
-			if !checkErr(err, w) {
-				return
-			}
-
-			buffer.WriteString(" SET user_id=?,push_token=?,session_token=?")
-			stmt, err = db.Prepare(buffer.String())
-			if !checkErr(err, w) {
-				return
-			}
-			res, err := stmt.Exec(user_id, pt, hst)
+			res, err := insertMobile.Exec(user_id, pt, hst)
 			if !checkErr(err, w) {
 				return
 			}
@@ -564,32 +492,33 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			Success:       1,
 			Device_id:     int(di),
 			Session_token: string(st),
+			Time:          int32(time.Now().Unix()),
 		}
 		json.NewEncoder(w).Encode(response)
 
 	} else {
 		//device has entry already, update existing
-		buffer.WriteString("UPDATE ")
-		buffer.WriteString(table)
 		if sys == "computer" {
 			//is computer
-			buffer.WriteString(" SET user_id=?,status=?,game=?,session_token=? WHERE device_id=?")
-			stmt, err := db.Prepare(buffer.String())
+			//log out other computers
+
+			_, err = stmtUpdateSession.Exec(nil, "", user_id)
 			if !checkErr(err, w) {
 				return
 			}
-			_, err = stmt.Exec(user_id, 0, 0, hst, di)
+			_, err = stmtUpdateComputer.Exec(user_id, 0, 0, hst, di)
 			if !checkErr(err, w) {
 				return
 			}
 		} else {
-			//is mobile, insert push token
-			buffer.WriteString(" SET user_id=?,push_token=?,session_token=? WHERE device_id=?")
-			stmt, err := db.Prepare(buffer.String())
-			if !checkErr(err, w) {
-				return
+			var stmtUpdateMobile *sql.Stmt
+			if sys == "android" {
+				stmtUpdateMobile = stmtUpdateAndroid
+			} else if sys == "ios" {
+				stmtUpdateMobile = stmtUpdateIphone
 			}
-			_, err = stmt.Exec(user_id, pt, hst, di)
+
+			_, err = stmtUpdateMobile.Exec(user_id, pt, hst, di)
 			if !checkErr(err, w) {
 				return
 			}
@@ -598,10 +527,10 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Success:       1,
 			Session_token: string(st),
+			Time:          int32(time.Now().Unix()),
 		}
 		json.NewEncoder(w).Encode(response)
 	}
-	//returned Optional(device_id), success, Optional(error), session_token
 }
 
 func handleSetStatus(w http.ResponseWriter, r *http.Request) {
@@ -624,20 +553,14 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//update status
-	stmt, err := db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON('" + myip + "') where device_id=?")
-	if !checkErr(err, w) {
-		return
-	}
-
-	_, err = stmt.Exec(sa, gm, int32(time.Now().Unix()), di)
+	_, err = stmtUpdateStatus.Exec(sa, gm, int32(time.Now().Unix()), di)
 	if !checkErr(err, w) {
 		return
 	}
 
 	if r.Form.Get("status") == "4" {
 
-		rows, err := db.Query("SELECT auto_accept FROM users WHERE user_id=? LIMIT 1", user_id)
+		rows, err := stmtSelectAutoAccept.Query(user_id)
 		//fmt.Fprintf(w, "%s", rows)
 		if !checkErr(err, w) {
 			return
@@ -682,7 +605,7 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query("SELECT game, status, status_timestamp, INET_NTOA(`status_ip`) FROM computers WHERE user_id=? LIMIT 1", user_id)
+	rows, err := stmtSelectStatus.Query(user_id)
 	if !checkErr(err, w) {
 		return
 	}
@@ -785,20 +708,14 @@ func handleUpdateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var table string
-
+	var stmtUpdatePushTokenMobile *sql.Stmt
 	if sys == "ios" {
-		table = "iphones"
+		stmtUpdatePushTokenMobile = stmtUpdatePushTokenAndroid
 	} else if sys == "android" {
-		table = "androids"
+		stmtUpdatePushTokenMobile = stmtUpdatePushTokenIphone
 	}
 
-	stmt, err := db.Prepare("update " + table + " set push_token=? where device_id=?")
-	if !checkErr(err, w) {
-		return
-	}
-
-	_, err = stmt.Exec(pt, di)
+	_, err = stmtUpdatePushTokenMobile.Exec(pt, di)
 	if !checkErr(err, w) {
 		return
 	}
@@ -831,12 +748,7 @@ func handleUpdateAutoAccept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stmt, err := db.Prepare("update users set auto_accept=? where user_id=?")
-	if !checkErr(err, w) {
-		return
-	}
-
-	_, err = stmt.Exec(aa, uid)
+	_, err = stmtUpdateAutoAccept.Exec(aa, uid)
 	if !checkErr(err, w) {
 		return
 	}
@@ -865,7 +777,7 @@ func handleGetAutoAccept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query("SELECT auto_accept FROM users WHERE user_id=? LIMIT 1", uid)
+	rows, err := stmtSelectAutoAccept.Query(uid)
 	//fmt.Fprintf(w, "%s", rows)
 	if !checkErr(err, w) {
 		return
@@ -895,38 +807,53 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 	var maxwait int
 	maxwait = 0
 	gamestring := "Matchmaking"
+	var ha int
 	switch {
 	case g == 0:
 		gamestring = "Matchmaking"
+		ha = 0
 		break
 	case g == 1:
 		gamestring = "Dota2"
 		ab = int32(time.Now().Unix()) + 45
 		maxwait = 45
+		ha = 1
 		break
 	case g == 2:
 		gamestring = "HoN"
+		ha = 0
 		break
 	case g == 3:
 		gamestring = "CS:GO"
 		maxwait = 20
 		ab = int32(time.Now().Unix()) + 20
+		ha = 1
 		break
 	case g == 4:
 		gamestring = "HotS"
+		ha = 0
 		break
 	case g == 5:
 		gamestring = "LoL"
 		maxwait = 10
 		ab = int32(time.Now().Unix()) + 10
+		ha = 1
 		break
 	case g > 5 || g < 0:
 		gamestring = "Matchmaking"
+		ha = 0
 		break
 	}
 
+	var msg string
+	if aa != 0 && ha != 0 {
+		msg = "Accepted " + gamestring + " queue on your behalf, get back quick!"
+	} else {
+		msg = gamestring + " queue ended!"
+	}
+
 	//push to all iPhones
-	rows, err := db.Query("SELECT push_token FROM iphones WHERE user_id=?", user_id)
+	rows, err := stmtSelectPushTokensIphone.Query(user_id)
 	if !checkErr(err, w) {
 		return
 	}
@@ -939,39 +866,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 				return
 			}
 			if utf8.RuneCountInString(token) > 10 {
-				//pushit ios
-				payload := apns.NewPayload()
-				payload.Alert = gamestring + " queue ended!"
-				payload.Sound = "NotifCustom1.aif"
-
-				pn := apns.NewPushNotification()
-				pn.AddPayload(payload)
-				pn.DeviceToken = token
-
-				pn.Set("accept_before", ab)
-				pn.Set("ip", myip)
-				//DEVELOPMENT
-				//client := apns.NewClient("gateway.sandbox.push.apple.com:2195", "/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Cert.pem", "/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Key-Unencrypted.pem")
-				//PRODUCTION
-				client := apns.NewClient("gateway.push.apple.com:2195", "/home/ubuntu/Keys/prod-push/GameQiOS-Prod-Cert.pem", "/home/ubuntu/Keys/prod-push/GameQiOS-Prod-Key-Unencrypted.pem")
-				/*
-					Cert locations:
-
-					/home/ubuntu/Keys/prod-push/GameQiOS-Prod-Key-Unencrypted.pem
-					/home/ubuntu/Keys/prod-push/GameQiOS-Prod-Cert.pem
-
-					/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Key-Unencrypted.pem
-					/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Cert.pem
-				*/
-
-				_ = client.Send(pn)
-				//smths := smth.
-
-				/*
-				   alert, _ := pn.PayloadString()
-				   fmt.Println("  Alert:", alert)
-				   fmt.Println("Success:", resp.Success)
-				   fmt.Println("  Error:", resp.Error)*/
+				go pushToIos(token, msg, ab)
 			}
 
 		}
@@ -979,7 +874,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 
 	//push to all Androids
 
-	rows2, err := db.Query("SELECT push_token FROM androids WHERE user_id=?", user_id)
+	rows2, err := stmtSelectPushTokensAndroid.Query(user_id)
 	if !checkErr(err, w) {
 		return
 	}
@@ -991,22 +886,8 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 			return
 		}
 		if utf8.RuneCountInString(token) > 10 {
-			data := map[string]interface{}{"message": "Queue ended for " + gamestring + "!"}
-			msg := gcm.NewMessage(data, token)
 
-			// Create a Sender to send the message.
-			sender := &gcm.Sender{ApiKey: "AIzaSyC2NvDf3WUbz_ekl6nR2CcpucmTRNmtPcg"}
-
-			// Send the message and receive the response after at most two retries.
-			_, err := sender.Send(msg, 2)
-			if err != nil {
-				response := Response{
-					Success: 0,
-					Error:   "Failed to send message:" + err.Error(),
-				}
-				json.NewEncoder(w).Encode(response)
-				return
-			}
+			go pushToAndroid(token, msg)
 
 		}
 
@@ -1036,6 +917,58 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 	json.NewEncoder(w).Encode(response)
 
 	//return success, Optional(error)
+}
+
+func pushToIos(t string, pl string, ab int32) bool {
+	//pushit ios
+	payload := apns.NewPayload()
+	payload.Alert = pl
+	payload.Sound = "NotifCustom1.aif"
+
+	pn := apns.NewPushNotification()
+	pn.AddPayload(payload)
+	pn.DeviceToken = t
+
+	pn.Set("accept_before", ab)
+	pn.Set("ip", myip)
+	//DEVELOPMENT
+	//client := apns.NewClient("gateway.sandbox.push.apple.com:2195", "/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Cert.pem", "/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Key-Unencrypted.pem")
+	//PRODUCTION
+	client := apns.NewClient("gateway.push.apple.com:2195", "/home/ubuntu/Keys/prod-push/GameQiOS-Prod-Cert.pem", "/home/ubuntu/Keys/prod-push/GameQiOS-Prod-Key-Unencrypted.pem")
+	/*
+		Cert locations:
+
+		/home/ubuntu/Keys/prod-push/GameQiOS-Prod-Key-Unencrypted.pem
+		/home/ubuntu/Keys/prod-push/GameQiOS-Prod-Cert.pem
+
+		/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Key-Unencrypted.pem
+		/home/ubuntu/Keys/dev-push/GameQiOS-Dev-Cert.pem
+	*/
+
+	_ = client.Send(pn)
+
+	/*
+	   alert, _ := pn.PayloadString()
+	   fmt.Println("  Alert:", alert)
+	   fmt.Println("Success:", resp.Success)
+	   fmt.Println("  Error:", resp.Error)*/
+
+	return true
+}
+
+func pushToAndroid(t string, pl string) bool {
+	data := map[string]interface{}{"message": pl}
+	msg := gcm.NewMessage(data, t)
+
+	// Create a Sender to send the message.
+	sender := &gcm.Sender{ApiKey: "AIzaSyC2NvDf3WUbz_ekl6nR2CcpucmTRNmtPcg"}
+
+	// Send the message and receive the response after at most two retries.
+	_, err := sender.Send(msg, 2)
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 func handleVersionControl(w http.ResponseWriter, r *http.Request) {
@@ -1118,7 +1051,7 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query("SELECT password FROM users WHERE user_id=? LIMIT 1", user_id)
+	rows, err := stmtSelectPassword.Query(user_id)
 	if !checkErr(err, w) {
 		return
 	}
@@ -1141,7 +1074,8 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		response := Response{
 			Success: 0,
-			Error:   err.Error(),
+			//Error:   err.Error(),
+			Error: "Old password invalid",
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -1153,12 +1087,7 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stmt, err := db.Prepare("UPDATE users SET password=? WHERE user_id=?")
-	if !checkErr(err, w) {
-		return
-	}
-
-	_, err = stmt.Exec(hnpw, user_id)
+	_, err = stmtUpdatePassword.Exec(hnpw, user_id)
 	if !checkErr(err, w) {
 		return
 	}
@@ -1187,12 +1116,7 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stmt, err := db.Prepare("UPDATE users SET password=? WHERE email=?")
-	if !checkErr(err, w) {
-		return
-	}
-
-	_, err = stmt.Exec(hnpw, em)
+	_, err = stmtUpdatePasswordWithEmail.Exec(hnpw, em)
 	if !checkErr(err, w) {
 		return
 	}
@@ -1459,6 +1383,36 @@ var db *sql.DB
 var myip string
 var channels = make(map[int]chan string)
 
+var stmtUpdatePassword *sql.Stmt
+var stmtSelectCredentials *sql.Stmt
+var stmtClearLoginAttempt *sql.Stmt
+var stmtGetLoginAttempts *sql.Stmt
+var stmtInsertLoginAttempt *sql.Stmt
+var stmtUpdateSession *sql.Stmt
+var stmtInsertAndroid *sql.Stmt
+var stmtInsertIphone *sql.Stmt
+var stmtInsertComputer *sql.Stmt
+var stmtUpdateComputer *sql.Stmt
+var stmtUpdateIphone *sql.Stmt
+var stmtUpdateAndroid *sql.Stmt
+var stmtUpdateIphoneWithPT *sql.Stmt
+var stmtUpdateAndroidWithPT *sql.Stmt
+var stmtCheckComputerSession *sql.Stmt
+var stmtCheckIphoneSession *sql.Stmt
+var stmtCheckAndroidSession *sql.Stmt
+var stmtCheckEmailExists *sql.Stmt
+var stmtInsertUser *sql.Stmt
+var stmtUpdateStatus *sql.Stmt
+var stmtSelectAutoAccept *sql.Stmt
+var stmtSelectStatus *sql.Stmt
+var stmtUpdatePushTokenAndroid *sql.Stmt
+var stmtUpdatePushTokenIphone *sql.Stmt
+var stmtUpdateAutoAccept *sql.Stmt
+var stmtSelectPushTokensIphone *sql.Stmt
+var stmtSelectPushTokensAndroid *sql.Stmt
+var stmtSelectPassword *sql.Stmt
+var stmtUpdatePasswordWithEmail *sql.Stmt
+
 func DbConnect() *sql.DB {
 
 	db, err := sql.Open("mysql", "basicuser:kokanonaesostotorornonetot1@tcp(gqdb.cljdjugbpchc.eu-west-1.rds.amazonaws.com:3306)/GQDB")
@@ -1474,6 +1428,123 @@ func main() {
 	db = DbConnect()
 	db.SetMaxIdleConns(1000)
 	myip = getPublicIP()
+	var err error
+	stmtUpdatePassword, err = db.Prepare("UPDATE users SET password=? WHERE user_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtSelectCredentials, err = db.Prepare("SELECT user_id, password FROM users WHERE email=? LIMIT 1")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtClearLoginAttempt, err = db.Prepare("delete from login_attempts where user_id=? and ?-time>600")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtGetLoginAttempts, err = db.Prepare("SELECT * FROM login_attempts WHERE user_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtInsertLoginAttempt, err = db.Prepare("INSERT login_attempts SET user_id=?,time=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdateSession, err = db.Prepare("update computers set user_id=?, session_token=? where user_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtInsertAndroid, err = db.Prepare("INSERT androids SET user_id=?, push_token=?, session_token=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtInsertIphone, err = db.Prepare("INSERT iphones SET user_id=?, push_token=?, session_token=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtInsertComputer, err = db.Prepare("INSERT computers SET user_id=?,status=?,game=?,session_token=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdateComputer, err = db.Prepare("UPDATE computer SET user_id=?,status=?,game=?,session_token=? WHERE device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdateAndroid, err = db.Prepare("UPDATE androids SET user_id=?,push_token=?,session_token=? WHERE device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdateIphone, err = db.Prepare("UPDATE iphones SET user_id=?,push_token=?,session_token=? WHERE device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdateAndroidWithPT, err = db.Prepare("update androids set user_id=?, push_token=?, session_token=? where push_token=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdateIphoneWithPT, err = db.Prepare("update iphones set user_id=?, push_token=?, session_token=? where push_token=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtCheckAndroidSession, err = db.Prepare("SELECT session_token, user_id FROM androids WHERE device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtCheckIphoneSession, err = db.Prepare("SELECT session_token, user_id FROM iphones WHERE device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtCheckComputerSession, err = db.Prepare("SELECT session_token, user_id FROM computers WHERE device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtCheckEmailExists, err = db.Prepare("SELECT * FROM users WHERE email=? LIMIT 1")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtInsertUser, err = db.Prepare("INSERT users SET email=?,password=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdateStatus, err = db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON('" + myip + "') where device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtSelectAutoAccept, err = db.Prepare("SELECT auto_accept FROM users WHERE user_id=? LIMIT 1")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtSelectStatus, err = db.Prepare("SELECT game, status, status_timestamp, INET_NTOA(`status_ip`) FROM computers WHERE user_id=? LIMIT 1")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdatePushTokenAndroid, err = db.Prepare("update androids set push_token=? where device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdatePushTokenIphone, err = db.Prepare("update iphones set push_token=? where device_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdateAutoAccept, err = db.Prepare("update users set auto_accept=? where user_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtSelectPushTokensIphone, err = db.Prepare("SELECT push_token FROM iphones WHERE user_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtSelectPushTokensAndroid, err = db.Prepare("SELECT push_token FROM androids WHERE user_id=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtSelectPassword, err = db.Prepare("SELECT password FROM users WHERE user_id=? LIMIT 1")
+	if err != nil {
+		panic(err.Error())
+	}
+	stmtUpdatePasswordWithEmail, err = db.Prepare("UPDATE users SET password=? WHERE email=?")
+	if err != nil {
+		panic(err.Error())
+	}
 
 	http.HandleFunc("/", handle404)
 	http.HandleFunc("/computer/login", handleLogin)
