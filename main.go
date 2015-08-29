@@ -1200,24 +1200,24 @@ func handleSubmitCSV(w http.ResponseWriter, r *http.Request) {
 	}
 	p := fmt.Sprint("/home/ubuntu/CSVs/", t, "/", gm)
 	ex, err := pathexists(p)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not find path to CSV file") {
 		return
 	}
 	if !ex {
 		p2 := fmt.Sprint("/home/ubuntu/CSVs/", t)
 		ex2, err := pathexists(p2)
-		if !checkErr(err, w) {
+		if !checkErr(err, w, "Could not find CSV file path") {
 			return
 		}
 		if !ex2 {
 			err = os.Mkdir("/home/ubuntu/CSVs"+string(filepath.Separator)+strconv.FormatInt(t, 10), 0777)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not find CSV file path") {
 				return
 			}
 		}
 
 		err = os.Mkdir("/home/ubuntu/CSVs"+string(filepath.Separator)+strconv.FormatInt(t, 10)+string(filepath.Separator)+strconv.FormatInt(gm, 10), 0777)
-		if !checkErr(err, w) {
+		if !checkErr(err, w, "Could not find path to CSV file") {
 			return
 		}
 	}
@@ -1225,7 +1225,7 @@ func handleSubmitCSV(w http.ResponseWriter, r *http.Request) {
 	d := []byte(csv)
 	f := fmt.Sprint("/home/ubuntu/CSVs/", t, "/", gm, "/", di, "_", int32(time.Now().Unix()))
 	err = ioutil.WriteFile(f, d, 0777)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not write file") {
 		return
 	}
 
@@ -1250,14 +1250,14 @@ func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 
 	//check session
 	err, _ = checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "broken session") {
 		return
 	}
 
 	d := []byte(fb)
 	f := fmt.Sprint("/home/ubuntu/Feedback/", di, "_", int32(time.Now().Unix()))
 	err = ioutil.WriteFile(f, d, 0777)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "could not write file") {
 		return
 	}
 
