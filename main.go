@@ -31,8 +31,8 @@ func checkErr(err error, w http.ResponseWriter, msg string) (bol bool) {
 	if err != nil {
 		response := Response{
 			Success: 0,
-			Error, msg,
-			Debug: err.Error(),
+			Error:   msg,
+			Debug:   err.Error(),
 		}
 		json.NewEncoder(w).Encode(response)
 		return false
