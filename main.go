@@ -1,7 +1,5 @@
 package main
 
-//TODO , threading
-//TODO , prepare all statements
 import (
 	"bytes"
 	"crypto/sha256"
@@ -29,11 +27,12 @@ import (
 	"unicode/utf8"
 )
 
-func checkErr(err error, w http.ResponseWriter) (bol bool) {
+func checkErr(err error, w http.ResponseWriter, msg string) (bol bool) {
 	if err != nil {
 		response := Response{
 			Success: 0,
-			Error:   err.Error(),
+			Error, msg,
+			Debug: err.Error(),
 		}
 		json.NewEncoder(w).Encode(response)
 		return false
@@ -49,6 +48,7 @@ func validateEmail(email string, w http.ResponseWriter) (bol bool) {
 		response := Response{
 			Success: 0,
 			Error:   "Invalid email address",
+			Debug:   "Specified email did not match email regex",
 		}
 		json.NewEncoder(w).Encode(response)
 		return false
@@ -62,6 +62,7 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 type Response struct {
 	Success         int    `json:"success"`
 	Error           string `json:"error,omitempty"`
+	Debug           string `json:"debug, omitempty"`
 	Device_id       int    `json:"device_id,omitempty"`
 	Session_token   string `json:"session_token,omitempty"`
 	Current_version string `json:"current_version,omitempty"`
@@ -101,6 +102,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Success: 0,
 			Error:   "Password too short",
+			Debug:   "Password less than 6 characters",
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -114,7 +116,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	//check email exists in users
 	rows, err := stmtSelectCredentials.Query(em)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not retrieve account credentials") {
 		return
 	}
 	//fmt.Fprintf(w, "Checkat error")
@@ -136,6 +138,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Success: 0,
 			Error:   "Invalid email address",
+			Debug:   "Email not found in query",
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -146,14 +149,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	//bruteforce check
 	//first clear old rows
 	_, err = stmtClearLoginAttempt.Exec(user_id, int32(time.Now().Unix()))
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not clear login attempt history") {
 		return
 	}
 	//fmt.Fprintf(w, "pw:%s di:%s pt:%s sys:%s hpw:%s", pw, di, pt, sys, hpw)
 
 	//check how many rows remain
 	rows2, err2 := stmtGetLoginAttempts.Query(user_id)
-	checkErr(err2, w)
+	if !checkErr(err2, w, "Could not retrieve previous login attempts") {
+		return
+	}
 	n2 := 0
 	if rows2 != nil {
 		defer rows2.Close()
@@ -169,6 +174,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Success: 0,
 			Error:   "Too many recent login attempts. This account has been locked for up to 10 minutes.",
+			Debug:   "Bruteforce block",
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -182,7 +188,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		//insert entry in login_attempts
 
 		_, err = stmtInsertLoginAttempt.Exec(user_id, int32(time.Now().Unix()))
-		if !checkErr(err, w) {
+		if !checkErr(err, w, "Could not register login attempt") {
 			return
 		}
 
@@ -190,6 +196,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Success: 0,
 			Error:   "Invalid password",
+			Debug:   erro.Error(),
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -200,7 +207,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	//generate st
 	st := []byte(randSeq(32))
 	hst, err := bcrypt.GenerateFromPassword(st, 11)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not hash password") {
 		return
 	}
 
@@ -212,16 +219,16 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			//is computer
 
 			_, err = stmtUpdateSession.Exec(nil, "", user_id)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not log out other devices from account") {
 				return
 			}
 
 			res, err := stmtInsertComputer.Exec(user_id, 0, 0, hst)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Login failed") {
 				return
 			}
 			di, err = res.LastInsertId()
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not retrieve device id") {
 				return
 			}
 		} else {
@@ -235,15 +242,15 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 				insertMobile = stmtInsertIphone
 			}
 			_, err = upMobileWithPT.Exec(nil, "", "", pt)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not remove old entries for "+sys) {
 				return
 			}
 			res, err := insertMobile.Exec(user_id, pt, hst)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Login failed") {
 				return
 			}
 			di, err = res.LastInsertId()
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not retrieve device id") {
 				return
 			}
 		}
@@ -263,11 +270,11 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			//log out other computers
 
 			_, err = stmtUpdateSession.Exec(nil, "", user_id)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not log out other devices from account") {
 				return
 			}
 			_, err = stmtUpdateComputer.Exec(user_id, 0, 0, hst, di)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Login failed") {
 				return
 			}
 		} else {
@@ -279,7 +286,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			}
 
 			_, err = stmtUpdateMobile.Exec(user_id, pt, hst, di)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Login failed") {
 				return
 			}
 		}
@@ -307,7 +314,7 @@ func checkSession(di int, s_t string, sys string, w http.ResponseWriter) (err er
 	}
 
 	rows, err := stmtCheckSess.Query(di)
-	if !checkErr(err, w) {
+	if err != nil {
 		return err, 0
 	}
 
@@ -345,14 +352,14 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	st := r.Form.Get("session_token")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
 	err, _ = checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "session broken") {
 		return
 	}
 
 	if sys == "computer" {
 
 		_, err = stmtUpdateComputer.Exec(nil, 0, 0, "", di)
-		if !checkErr(err, w) {
+		if !checkErr(err, w, "Could not clear device entry in database") {
 			return
 		}
 	} else {
@@ -363,7 +370,7 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 			stmtUpdateMobile = stmtUpdateAndroid
 		}
 		_, err = stmtUpdateMobile.Exec(nil, "", "", di)
-		if !checkErr(err, w) {
+		if !checkErr(err, w, "Could not clear device entry in database") {
 			return
 		}
 	}
@@ -399,7 +406,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	//check email exists in users
 	rows, err := stmtCheckEmailExists.Query(em)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not check if email is duplicate") {
 		return
 	}
 	n := 0
@@ -415,6 +422,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Success: 0,
 			Error:   "An account already exists with the specified email address",
+			Debug:   "duplicate",
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -422,7 +430,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	//hash password
 	hpw, err := bcrypt.GenerateFromPassword(pw, 11)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not generate password hash") {
 		return
 	}
 
@@ -431,17 +439,17 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 	//generate st and hst
 	st := []byte(randSeq(32))
 	hst, err := bcrypt.GenerateFromPassword(st, 11)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not generate session identifier") {
 		return
 	}
 
 	//insert entry to users
 	res1, err := stmtInsertUser.Exec(em, hpw)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Register failed") {
 		return
 	}
 	user_id, err := res1.LastInsertId()
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not retrieve user id") {
 		return
 	}
 
@@ -451,17 +459,12 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 		if sys == "computer" {
 			//is computer
 
-			_, err = stmtUpdateSession.Exec(nil, "", user_id)
-			if !checkErr(err, w) {
-				return
-			}
-
 			res, err := stmtInsertComputer.Exec(user_id, 0, 0, hst)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not create device entry") {
 				return
 			}
 			di, err = res.LastInsertId()
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not retrieve device id") {
 				return
 			}
 		} else {
@@ -475,15 +478,15 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 				insertMobile = stmtInsertIphone
 			}
 			_, err = upMobileWithPT.Exec(nil, "", "", pt)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not take over push token") {
 				return
 			}
 			res, err := insertMobile.Exec(user_id, pt, hst)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not create device entry") {
 				return
 			}
 			di, err = res.LastInsertId()
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not retrieve device id") {
 				return
 			}
 		}
@@ -502,12 +505,8 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			//is computer
 			//log out other computers
 
-			_, err = stmtUpdateSession.Exec(nil, "", user_id)
-			if !checkErr(err, w) {
-				return
-			}
 			_, err = stmtUpdateComputer.Exec(user_id, 0, 0, hst, di)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not update device entry") {
 				return
 			}
 		} else {
@@ -519,7 +518,7 @@ func handleRegister(w http.ResponseWriter, r *http.Request) {
 			}
 
 			_, err = stmtUpdateMobile.Exec(user_id, pt, hst, di)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not update device entry") {
 				return
 			}
 		}
@@ -549,12 +548,12 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "status: %s, st: %s, di: %s, gm: %s", sa, st, di, gm)
 	//check session
 	err, user_id := checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "session broken") {
 		return
 	}
 
 	_, err = stmtUpdateStatus.Exec(sa, gm, int32(time.Now().Unix()), di)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not update status") {
 		return
 	}
 
@@ -562,7 +561,7 @@ func handleSetStatus(w http.ResponseWriter, r *http.Request) {
 
 		rows, err := stmtSelectAutoAccept.Query(user_id)
 		//fmt.Fprintf(w, "%s", rows)
-		if !checkErr(err, w) {
+		if !checkErr(err, w, "Could not get auto accept setting") {
 			return
 		}
 
@@ -601,12 +600,12 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 
 	//check session
 	err, user_id := checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "broken session") {
 		return
 	}
 
 	rows, err := stmtSelectStatus.Query(user_id)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not retrieve status") {
 		return
 	}
 	resp := Response{
@@ -622,7 +621,7 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 			var timestamp int32
 			var ip string
 			err = rows.Scan(&game, &status, &timestamp, &ip)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not read status row") {
 				return
 			}
 			if int32(time.Now().Unix())-timestamp < 130 {
@@ -665,7 +664,7 @@ func handleAccept(w http.ResponseWriter, r *http.Request) {
 
 	//check session
 	err, user_id := checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "broken session") {
 		return
 	}
 	_, ok := channels[user_id]
@@ -704,7 +703,7 @@ func handleUpdateToken(w http.ResponseWriter, r *http.Request) {
 
 	//check session
 	err, _ = checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "broken session") {
 		return
 	}
 
@@ -716,7 +715,7 @@ func handleUpdateToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = stmtUpdatePushTokenMobile.Exec(pt, di)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not update token") {
 		return
 	}
 
@@ -744,12 +743,12 @@ func handleUpdateAutoAccept(w http.ResponseWriter, r *http.Request) {
 
 	//check session
 	err, uid := checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "broken session") {
 		return
 	}
 
 	_, err = stmtUpdateAutoAccept.Exec(aa, uid)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not update auto accept setting") {
 		return
 	}
 
@@ -773,13 +772,13 @@ func handleGetAutoAccept(w http.ResponseWriter, r *http.Request) {
 
 	//check session
 	err, uid := checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "broken session") {
 		return
 	}
 
 	rows, err := stmtSelectAutoAccept.Query(uid)
 	//fmt.Fprintf(w, "%s", rows)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not retrieve auto accept setting") {
 		return
 	}
 
@@ -789,6 +788,9 @@ func handleGetAutoAccept(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		for rows.Next() {
 			err = rows.Scan(&aa)
+			if !checkErr(err, w, "Error reading auto accept setting") {
+				return
+			}
 		}
 	}
 
@@ -854,7 +856,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 
 	//push to all iPhones
 	rows, err := stmtSelectPushTokensIphone.Query(user_id)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not retrieve iOS push tokens") {
 		return
 	}
 	if rows != nil {
@@ -862,7 +864,7 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 		for rows.Next() {
 			var token string
 			err = rows.Scan(&token)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not read APNS push token") {
 				return
 			}
 			if utf8.RuneCountInString(token) > 10 {
@@ -875,14 +877,14 @@ func pushQueuePop(w http.ResponseWriter, g int, user_id int, db *sql.DB, aa int)
 	//push to all Androids
 
 	rows2, err := stmtSelectPushTokensAndroid.Query(user_id)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not retrieve GCM push tokens") {
 		return
 	}
 	for rows2.Next() {
 
 		var token string
 		err = rows2.Scan(&token)
-		if !checkErr(err, w) {
+		if !checkErr(err, w, "Could not read GCM push token") {
 			return
 		}
 		if utf8.RuneCountInString(token) > 10 {
@@ -1029,6 +1031,7 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Success: 0,
 			Error:   "Old password too short",
+			Debug:   "oldPass.length < 6",
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -1037,6 +1040,7 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 		response := Response{
 			Success: 0,
 			Error:   "New password too short",
+			Debug:   "newPass.length < 6",
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -1047,12 +1051,12 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 
 	//check session
 	err, user_id := checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "broken session") {
 		return
 	}
 
 	rows, err := stmtSelectPassword.Query(user_id)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not verify password") {
 		return
 	}
 	var hpwstring string
@@ -1062,7 +1066,7 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 
 			err = rows.Scan(&hpwstring)
-			if !checkErr(err, w) {
+			if !checkErr(err, w, "Could not read password from database") {
 				return
 			}
 		}
@@ -1076,6 +1080,7 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 			Success: 0,
 			//Error:   err.Error(),
 			Error: "Old password invalid",
+			Debug: err.Error(),
 		}
 		json.NewEncoder(w).Encode(response)
 		return
@@ -1083,12 +1088,12 @@ func handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
 
 	//hash password
 	hnpw, err := bcrypt.GenerateFromPassword(npw, 11)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not generate password hash") {
 		return
 	}
 
 	_, err = stmtUpdatePassword.Exec(hnpw, user_id)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Failed to update to new password") {
 		return
 	}
 
@@ -1112,12 +1117,12 @@ func handleForgotPassword(w http.ResponseWriter, r *http.Request) {
 	npw := randSeq(10)
 	tnpw := hashSHA256(npw)
 	hnpw, err := bcrypt.GenerateFromPassword([]byte(tnpw), 11)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not generate new password") {
 		return
 	}
 
 	_, err = stmtUpdatePasswordWithEmail.Exec(hnpw, em)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not grant new password") {
 		return
 	}
 
@@ -1151,12 +1156,12 @@ Sincerely,
 	}
 	t := template.New("emailTemplate")
 	t, err = t.Parse(emailTemplate)
-	if err != nil {
-		log.Print("error trying to parse mail template")
+	if !checkErr(err, w, "error trying to parse mail template") {
+		return
 	}
 	err = t.Execute(&doc, context)
-	if err != nil {
-		log.Print("error trying to execute mail template")
+	if !checkErr(err, w, "error trying to execute mail template") {
+		return
 	}
 
 	//------END BODY
@@ -1164,7 +1169,7 @@ Sincerely,
 	auth := smtp.PlainAuth("", "gqform", "kaknaestorn1", "smtp.gmail.com")
 
 	err = smtp.SendMail("smtp.gmail.com:587", auth, "gqform", []string{em}, doc.Bytes())
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "Could not send email") {
 		return
 	}
 
@@ -1190,7 +1195,7 @@ func handleSubmitCSV(w http.ResponseWriter, r *http.Request) {
 
 	//check session
 	err, _ = checkSession(int(di), st, sys, w)
-	if !checkErr(err, w) {
+	if !checkErr(err, w, "broken session") {
 		return
 	}
 	p := fmt.Sprint("/home/ubuntu/CSVs/", t, "/", gm)
@@ -1287,6 +1292,7 @@ func checkKey(k string, w http.ResponseWriter) (bol bool) {
 		response := Response{
 			Success: 0,
 			Error:   "Invalid Key",
+			Debug:   "Invalid key",
 		}
 		json.NewEncoder(w).Encode(response)
 		return false
