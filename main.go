@@ -1430,128 +1430,161 @@ func DbConnect() *sql.DB {
 }
 
 func main() {
-
+	fmt.Println("  Alert: starting...")
 	db = DbConnect()
+	fmt.Println("  Alert: database connected")
 	db.SetMaxIdleConns(1000)
+	fmt.Println("  Alert: set max idle connections")
 	myip = getPublicIP()
+	fmt.Println("  Alert: got my ip " + myip)
 	var err error
+	fmt.Println("  Alert: preparing queries 1/29")
 	stmtUpdatePassword, err = db.Prepare("UPDATE users SET password=? WHERE user_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 2/29")
 	stmtSelectCredentials, err = db.Prepare("SELECT user_id, password FROM users WHERE email=? LIMIT 1")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 3/29")
 	stmtClearLoginAttempt, err = db.Prepare("delete from login_attempts where user_id=? and ?-time>600")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 4/29")
 	stmtGetLoginAttempts, err = db.Prepare("SELECT * FROM login_attempts WHERE user_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 5/29")
 	stmtInsertLoginAttempt, err = db.Prepare("INSERT login_attempts SET user_id=?,time=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 6/29")
 	stmtUpdateSession, err = db.Prepare("update computers set user_id=?, session_token=? where user_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 7/29")
 	stmtInsertAndroid, err = db.Prepare("INSERT androids SET user_id=?, push_token=?, session_token=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 8/29")
 	stmtInsertIphone, err = db.Prepare("INSERT iphones SET user_id=?, push_token=?, session_token=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 9/29")
 	stmtInsertComputer, err = db.Prepare("INSERT computers SET user_id=?,status=?,game=?,session_token=?")
 	if err != nil {
 		panic(err.Error())
 	}
-	stmtUpdateComputer, err = db.Prepare("UPDATE computer SET user_id=?,status=?,game=?,session_token=? WHERE device_id=?")
+	fmt.Println("  Alert: preparing queries 10/29")
+	stmtUpdateComputer, err = db.Prepare("UPDATE computers SET user_id=?,status=?,game=?,session_token=? WHERE device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 11/29")
 	stmtUpdateAndroid, err = db.Prepare("UPDATE androids SET user_id=?,push_token=?,session_token=? WHERE device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 12/29")
 	stmtUpdateIphone, err = db.Prepare("UPDATE iphones SET user_id=?,push_token=?,session_token=? WHERE device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 13/29")
 	stmtUpdateAndroidWithPT, err = db.Prepare("update androids set user_id=?, push_token=?, session_token=? where push_token=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 14/29")
 	stmtUpdateIphoneWithPT, err = db.Prepare("update iphones set user_id=?, push_token=?, session_token=? where push_token=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 15/29")
 	stmtCheckAndroidSession, err = db.Prepare("SELECT session_token, user_id FROM androids WHERE device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 16/29")
 	stmtCheckIphoneSession, err = db.Prepare("SELECT session_token, user_id FROM iphones WHERE device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 17/29")
 	stmtCheckComputerSession, err = db.Prepare("SELECT session_token, user_id FROM computers WHERE device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 18/29")
 	stmtCheckEmailExists, err = db.Prepare("SELECT * FROM users WHERE email=? LIMIT 1")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 19/29")
 	stmtInsertUser, err = db.Prepare("INSERT users SET email=?,password=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 20/29")
 	stmtUpdateStatus, err = db.Prepare("update computers set status=?, game=?, status_timestamp=?, status_ip=INET_ATON('" + myip + "') where device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 21/29")
 	stmtSelectAutoAccept, err = db.Prepare("SELECT auto_accept FROM users WHERE user_id=? LIMIT 1")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 22/29")
 	stmtSelectStatus, err = db.Prepare("SELECT game, status, status_timestamp, INET_NTOA(`status_ip`) FROM computers WHERE user_id=? LIMIT 1")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 23/29")
 	stmtUpdatePushTokenAndroid, err = db.Prepare("update androids set push_token=? where device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 24/29")
 	stmtUpdatePushTokenIphone, err = db.Prepare("update iphones set push_token=? where device_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 25/29")
 	stmtUpdateAutoAccept, err = db.Prepare("update users set auto_accept=? where user_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 26/29")
 	stmtSelectPushTokensIphone, err = db.Prepare("SELECT push_token FROM iphones WHERE user_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 27/29")
 	stmtSelectPushTokensAndroid, err = db.Prepare("SELECT push_token FROM androids WHERE user_id=?")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 28/29")
 	stmtSelectPassword, err = db.Prepare("SELECT password FROM users WHERE user_id=? LIMIT 1")
 	if err != nil {
 		panic(err.Error())
 	}
+	fmt.Println("  Alert: preparing queries 29/29")
 	stmtUpdatePasswordWithEmail, err = db.Prepare("UPDATE users SET password=? WHERE email=?")
 	if err != nil {
 		panic(err.Error())
 	}
 
+	fmt.Println("  Alert: setting up nodes ")
 	http.HandleFunc("/", handle404)
 	http.HandleFunc("/computer/login", handleLogin)
 	http.HandleFunc("/ios/login", handleLogin)
@@ -1588,7 +1621,7 @@ func main() {
 	http.HandleFunc("/android/accept", handleAccept)
 
 	http.HandleFunc("/test/push", handleTestPush)
-
+	fmt.Println("  Alert: setup ")
 	s := &http.Server{
 		Addr:           ":8080",
 		Handler:        nil,
@@ -1596,8 +1629,9 @@ func main() {
 		WriteTimeout:   60 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
+	fmt.Println("  Alert: server setup")
 	log.Fatal(s.ListenAndServe())
-
+	fmt.Println("  Alert: logged fatal")
 }
 
 func getPublicIP() string {
