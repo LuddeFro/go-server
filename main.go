@@ -1180,6 +1180,16 @@ Sincerely,
 }
 
 func handleSubmitCSV(w http.ResponseWriter, r *http.Request) {
+	sys := strings.Split(r.URL.Path[1:], "/")[0]
+	http.Redirect(w, r, "http://dev.gameq.io/"+sys+"/submitCSV", 200)
+}
+
+func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
+	sys := strings.Split(r.URL.Path[1:], "/")[0]
+	http.Redirect(w, r, "http://dev.gameq.io/"+sys+"/submitCSV", 200)
+}
+
+func handleStoreCSV(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	if !checkKey(r.Form.Get("key"), w) {
 		return
@@ -1236,7 +1246,7 @@ func handleSubmitCSV(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
+func handleStoreFeedback(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	if !checkKey(r.Form.Get("key"), w) {
 		return
@@ -1619,6 +1629,12 @@ func main() {
 	http.HandleFunc("/ios/forgotPassword", handleForgotPassword)
 	http.HandleFunc("/ios/accept", handleAccept)
 	http.HandleFunc("/android/accept", handleAccept)
+	http.HandleFunc("/android/storeFeedback", handleStoreFeedback)
+	http.HandleFunc("/ios/storeFeedback", handleStoreFeedback)
+	http.HandleFunc("/computer/storeFeedback", handleStoreFeedback)
+	http.HandleFunc("/android/storeCSV", handleStoreCSV)
+	http.HandleFunc("/ios/storeCSV", handleStoreCSV)
+	http.HandleFunc("/computer/storeCSV", handleStoreCSV)
 
 	http.HandleFunc("/test/push", handleTestPush)
 	fmt.Println("  Alert: setup ")
