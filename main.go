@@ -59,7 +59,7 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "(404) Hi there, I love %s! Unfortunately, I couldn't find it :/", r.URL.Path[1:])
 }
 
-func handleDebug(w http.ResponseWriter, r *http.Request) {
+func handleDebug1(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "(9000+) Hi there, I love debugging!")
 	p := db.Ping()
 	if p != nil {
@@ -67,6 +67,10 @@ func handleDebug(w http.ResponseWriter, r *http.Request) {
 	} else {
 		fmt.Fprintf(w, "ip: "+myip+" dbPing: success")
 	}
+}
+
+func handleDebug2(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "version beta 1")
 }
 
 type Response struct {
@@ -1600,7 +1604,8 @@ func main() {
 
 	fmt.Println("  Alert: setting up nodes ")
 	http.HandleFunc("/", handle404)
-	http.HandleFunc("/debug/1", handleDebug)
+	http.HandleFunc("/debug/1", handleDebug1)
+	http.HandleFunc("/debug/2", handleDebug2)
 	http.HandleFunc("/computer/login", handleLogin)
 	http.HandleFunc("/ios/login", handleLogin)
 	http.HandleFunc("/android/login", handleLogin)
