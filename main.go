@@ -61,7 +61,12 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 
 func handleDebug(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "(9000+) Hi there, I love debugging!")
-	fmt.Fprintf(w, "ip: "+myip+" dbPing: "+db.Ping().Error())
+	p := db.Ping()
+	if p != nil {
+		fmt.Fprintf(w, "ip: "+myip+" dbPing: "+db.Ping().Error())
+	} else {
+		fmt.Fprintf(w, "ip: "+myip+" dbPing: success")
+	}
 }
 
 type Response struct {
