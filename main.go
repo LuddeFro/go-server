@@ -96,20 +96,16 @@ func randSeq(n int) string {
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "logging in?\n")
-	fmt.Fprintf(w, "p1")
 	r.ParseForm()
 	//fmt.Fprintf(w, "parsed form")
 	em := strings.ToLower(r.Form.Get("email"))
-	fmt.Fprintf(w, "p1")
 	if !validateEmail(em, w) {
 		return
 	}
-	fmt.Fprintf(w, "p1")
 
 	if !checkKey(r.Form.Get("key"), w) {
 		return
 	}
-	fmt.Fprintf(w, "p1")
 	pw := []byte(r.Form.Get("password"))
 	if len(r.Form.Get("password")) < 6 {
 		response := Response{
@@ -120,27 +116,23 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	fmt.Fprintf(w, "p1")
 	di, err := strconv.ParseInt(r.Form.Get("device_id"), 10, 0) //optional
 	pt := r.Form.Get("push_token")                              //only mobile
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
-	fmt.Fprintf(w, "user: %s, pwd: %s, di: %s, pt: %s, sys: %s", em, pw, di, pt, sys)
+	// fmt.Fprintf(w, "user: %s, pwd: %s, di: %s, pt: %s, sys: %s", em, pw, di, pt, sys)
 
 	//fmt.Fprintf(w, "connected to DB")
 
 	//check email exists in users
 	rows, err := stmtSelectCredentials.Query(em)
-	fmt.Fprintf(w, "p1")
 	if !checkErr(err, w, "Could not retrieve account credentials") {
 		return
 	}
-	fmt.Fprintf(w, "p1")
 	//fmt.Fprintf(w, "Checkat error")
 	n := 0
 	var user_id int
 	var hpwstring string
 	//fmt.Fprintf(w, "hpw:%s, uid:%d, n:%d", hpwstring, user_id, n)
-	fmt.Fprintf(w, "p1")
 	if rows != nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -148,7 +140,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 			err = rows.Scan(&user_id, &hpwstring)
 		}
 	}
-	fmt.Fprintf(w, "p1")
 	if n == 0 {
 		//fmt.Fprintf(w, "n=======0")
 		response := Response{
@@ -159,18 +150,14 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
-	fmt.Fprintf(w, "p1")
 	hpw := []byte(hpwstring)
-	fmt.Fprintf(w, "p1")
 	//bruteforce check
 	//first clear old rows
 	_, err = stmtClearLoginAttempt.Exec(user_id, int32(time.Now().Unix()))
 	if !checkErr(err, w, "Could not clear login attempt history") {
 		return
 	}
-	fmt.Fprintf(w, "p1")
 	//fmt.Fprintf(w, "pw:%s di:%s pt:%s sys:%s hpw:%s", pw, di, pt, sys, hpw)
-	fmt.Fprintf(w, "p1")
 	//check how many rows remain
 	rows2, err2 := stmtGetLoginAttempts.Query(user_id)
 	if !checkErr(err2, w, "Could not retrieve previous login attempts") {
