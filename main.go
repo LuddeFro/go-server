@@ -1609,7 +1609,7 @@ func main() {
 
 	fmt.Println("  Alert: setting up nodes ")
 	http.HandleFunc("/", handle404)
-	http.HandleFunc("/debug", handleDebug)
+	http.HandleFunc("/debug/1", handleDebug)
 	http.HandleFunc("/computer/login", handleLogin)
 	http.HandleFunc("/ios/login", handleLogin)
 	http.HandleFunc("/android/login", handleLogin)
