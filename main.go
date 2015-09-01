@@ -105,7 +105,6 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Fprintf(w, "p1")
-	json.NewEncoder(w).Encode(response)
 	pw := []byte(r.Form.Get("password"))
 	if len(r.Form.Get("password")) < 6 {
 		response := Response{
