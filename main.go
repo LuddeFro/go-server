@@ -70,7 +70,7 @@ func handleDebug1(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleDebug2(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "version beta 1")
+	fmt.Fprintf(w, "version beta 2")
 }
 
 type Response struct {
