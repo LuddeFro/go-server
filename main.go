@@ -616,6 +616,24 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 	if !checkErr(err, w, "Could not retrieve status") {
 		return
 	}
+	aa := false
+	rows2, err := stmtSelectAutoAccept.Query(user_id)
+	if err != nil {
+		rows2 = nil
+	}
+	if rows2 != nil {
+		defer rows2.Close()
+		var aaint = 0
+		for rows2.Next() {
+			err = rows2.Scan(&aaint)
+			if err != nil {
+				aa = false
+			} else {
+				aa = aaint != 0
+			}
+		}
+	}
+
 	resp := Response{
 		Success: 1,
 		Game:    0,
@@ -634,16 +652,21 @@ func handleGetStatus(w http.ResponseWriter, r *http.Request) {
 			}
 			if int32(time.Now().Unix())-timestamp < 130 {
 				var ab int
-				ab = 0
-				if status == 4 {
-					if game == 1 {
-						ab = int(timestamp) + 45
-					} else if game == 3 {
-						ab = int(timestamp) + 20
-					} else if game == 5 {
-						ab = int(timestamp) + 10
+				if aa {
+					ab = 0
+				} else {
+					ab = 0
+					if status == 4 {
+						if game == 1 {
+							ab = int(timestamp) + 45
+						} else if game == 3 {
+							ab = int(timestamp) + 20
+						} else if game == 5 {
+							ab = int(timestamp) + 10
+						}
 					}
 				}
+
 				resp = Response{
 					Success:       1,
 					Game:          game,
