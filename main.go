@@ -1275,7 +1275,7 @@ Sincerely,
 
 func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
-	http.Redirect(w, r, "http://dev.gameq.io/"+sys+"/storeFeedback:8080", 301)
+	http.Redirect(w, r, "http://dev.gameq.io:8080/"+sys+"/storeFeedback", 302)
 	// director := func(req *http.Request) {
 	// 	fmt.Fprintf(w, "1")
 	// 	req = r
