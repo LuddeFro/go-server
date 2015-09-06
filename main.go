@@ -1275,7 +1275,7 @@ Sincerely,
 
 func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
-	redirect(w, r, "http://dev.gameq.io:8080/"+sys+"/storeFeedback", 302)
+	redirect(w, r, "http://dev.gameq.io:8080/"+sys+"/storeFeedback", 307)
 	// director := func(req *http.Request) {
 	// 	fmt.Fprintf(w, "1")
 	// 	req = r
@@ -1298,17 +1298,17 @@ func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 
 func redirect(w http.ResponseWriter, r *http.Request, urlStr string, code int) {
 
-	// w.Header().Set("Location", urlStr)
+	w.Header().Set("Location", urlStr)
 	w.Header().Set("Host", urlStr)
 	w.WriteHeader(code)
 
 	// RFC2616 recommends that a short note "SHOULD" be included in the
 	// response because older user agents may not understand 301/307.
 	// Shouldn't send the response for POST or HEAD; that leaves GET.
-
-	note := "<a href=\"" + htmlEscape(urlStr) + "\">" + http.StatusText(code) + "</a>.\n"
-	fmt.Fprintln(w, note)
-
+	if r.Method == "GET" {
+		note := "<a href=\"" + htmlEscape(urlStr) + "\">" + http.StatusText(code) + "</a>.\n"
+		fmt.Fprintln(w, note)
+	}
 }
 
 var htmlReplacer = strings.NewReplacer(
