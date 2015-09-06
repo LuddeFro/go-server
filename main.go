@@ -1306,9 +1306,23 @@ func redirect(w http.ResponseWriter, r *http.Request, urlStr string, code int) {
 	// response because older user agents may not understand 301/307.
 	// Shouldn't send the response for POST or HEAD; that leaves GET.
 	if r.Method == "GET" {
-		note := "<a href=\"" + http.htmlEscape(urlStr) + "\">" + http.statusText[code] + "</a>.\n"
+		note := "<a href=\"" + htmlEscape(urlStr) + "\">" + http.StatusText(code) + "</a>.\n"
 		fmt.Fprintln(w, note)
 	}
+}
+
+var htmlReplacer = strings.NewReplacer(
+	"&", "&amp;",
+	"<", "&lt;",
+	">", "&gt;",
+	// "&#34;" is shorter than "&quot;".
+	`"`, "&#34;",
+	// "&#39;" is shorter than "&apos;" and apos was not in HTML until HTML5.
+	"'", "&#39;",
+)
+
+func htmlEscape(s string) string {
+	return htmlReplacer.Replace(s)
 }
 
 func handleStoreCSV(w http.ResponseWriter, r *http.Request) {
