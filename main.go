@@ -1298,14 +1298,14 @@ func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 
 func redirect(w http.ResponseWriter, r *http.Request, urlStr string, code int) {
 
-	w.Header().Set("Location", urlStr)
+	// w.Header().Set("Location", urlStr)
 	w.Header().Set("Host", urlStr)
 	w.WriteHeader(code)
 
 	// RFC2616 recommends that a short note "SHOULD" be included in the
 	// response because older user agents may not understand 301/307.
 	// Shouldn't send the response for POST or HEAD; that leaves GET.
-	if r.Method == "GET" {
+	if r.Method == "POST" {
 		note := "<a href=\"" + htmlEscape(urlStr) + "\">" + http.StatusText(code) + "</a>.\n"
 		fmt.Fprintln(w, note)
 	}
