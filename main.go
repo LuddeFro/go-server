@@ -1275,25 +1275,26 @@ Sincerely,
 
 func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
+	http.Redirect(w, r, "http://dev.gameq.io/"+sys+"/storeFeedback", 301)
 	fmt.Fprintf(w, "0")
-	director := func(req *http.Request) {
-		fmt.Fprintf(w, "1")
-		req = r
+	// director := func(req *http.Request) {
+	// 	fmt.Fprintf(w, "1")
+	// 	req = r
 
-		fmt.Fprintf(w, "2")
-		req.URL.Scheme = "http"
-		fmt.Fprintf(w, "3")
-		req.URL.Host = "dev.gameq.io/" + sys + "/storeFeedback"
+	// 	fmt.Fprintf(w, "2")
+	// 	req.URL.Scheme = "http"
+	// 	fmt.Fprintf(w, "3")
+	// 	req.URL.Host = "dev.gameq.io/" + sys + "/storeFeedback"
 
-		fmt.Fprintf(w, "4")
-	}
+	// 	fmt.Fprintf(w, "4")
+	// }
 
-	fmt.Fprintf(w, "5")
-	proxy := &httputil.ReverseProxy{Director: director}
+	// fmt.Fprintf(w, "5")
+	// proxy := &httputil.ReverseProxy{Director: director}
 
-	fmt.Fprintf(w, "6")
-	proxy.ServeHTTP(w, r)
-	fmt.Fprintf(w, "7")
+	// fmt.Fprintf(w, "6")
+	// proxy.ServeHTTP(w, r)
+	// fmt.Fprintf(w, "7")
 }
 
 func handleStoreCSV(w http.ResponseWriter, r *http.Request) {
