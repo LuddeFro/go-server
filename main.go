@@ -1212,121 +1212,6 @@ Sincerely,
 	json.NewEncoder(w).Encode(response)
 }
 
-func handleSubmitCSV(w http.ResponseWriter, r *http.Request) {
-	sys := strings.Split(r.URL.Path[1:], "/")[0]
-	director := func(req *http.Request) {
-		req = r
-		req.URL.Scheme = "http"
-		req.URL.Host = "dev.gameq.io/" + sys + "/storeFeedback"
-	}
-	proxy := &httputil.ReverseProxy{Director: director}
-	proxy.ServeHTTP(w, r)
-
-}
-
-func sendEmail(s string, sub string, w http.ResponseWriter) bool {
-	//------BODY
-
-	type SmtpTemplateData struct {
-		From    string
-		To      string
-		Subject string
-		Body    string
-	}
-
-	const emailTemplate = `From: {{.From}}
-To: {{.To}}
-Subject: {{.Subject}}
-
-{{.Body}}
-
-Sincerely,
-
-{{.From}}
-`
-
-	var doc bytes.Buffer
-
-	context := &SmtpTemplateData{
-		"GameQ Customer",
-		"support@gameq.io",
-		sub,
-		s,
-	}
-	t := template.New("emailTemplate")
-	t, err := t.Parse(emailTemplate)
-	if !checkErr(err, w, "error setting up email with new password") {
-		return false
-	}
-	err = t.Execute(&doc, context)
-	if !checkErr(err, w, "error creating email with new password") {
-		return false
-	}
-
-	//------END BODY
-
-	auth := smtp.PlainAuth("", "gqform", "kaknaestorn1", "smtp.gmail.com")
-
-	err = smtp.SendMail("smtp.gmail.com:587", auth, "gqform", []string{"support@gameq.io"}, doc.Bytes())
-	if !checkErr(err, w, "error sending email with new password") {
-		return false
-	}
-	return true
-}
-
-func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
-	// sys := strings.Split(r.URL.Path[1:], "/")[0]
-	// redirect(w, r, "http://dev.gameq.io:8080/"+sys+"/storeFeedback", 307)
-	r.ParseForm()
-	if !checkKey(r.Form.Get("key"), w) {
-		fmt.Fprintf(w, "jumpone")
-		return
-	}
-	di, err := strconv.ParseInt(r.Form.Get("device_id"), 10, 0)
-	st := r.Form.Get("session_token")
-	fb := r.Form.Get("feedback")
-	sys := strings.Split(r.URL.Path[1:], "/")[0]
-
-	hc := http.Client{}
-	req, err := http.NewRequest("POST", "http://dev.gameq.io:8080/"+sys+"/storeFeedback", nil)
-
-	form := url.Values{}
-	form.Add("device_id", strconv.FormatInt(di, 10))
-	form.Add("session_token", st)
-	form.Add("feedback", fb)
-	form.Add("key", r.Form.Get("key"))
-	req.PostForm = form
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := hc.Do(req)
-
-	defer resp.Body.Close()
-	contents, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Fprintf(w, err.Error())
-	} else {
-		fmt.Fprintf(w, string(contents))
-	}
-	// director := func(req *http.Request) {
-	// 	fmt.Fprintf(w, "1")
-	// 	req = r
-
-	// 	fmt.Fprintf(w, "2")
-	// 	req.URL.Scheme = "http"
-	// 	fmt.Fprintf(w, "3")
-	// 	req.URL.Host = "dev.gameq.io/" + sys + "/storeFeedback"
-
-	// 	fmt.Fprintf(w, "4")
-	// }
-
-	// fmt.Fprintf(w, "5")
-	// proxy := &httputil.ReverseProxy{Director: director}
-
-	// fmt.Fprintf(w, "6")
-	// proxy.ServeHTTP(w, r)
-	// fmt.Fprintf(w, "7")
-}
-
 func redirect(w http.ResponseWriter, r *http.Request, urlStr string, code int) {
 
 	w.Header().Set("Location", urlStr)
@@ -1782,10 +1667,6 @@ func main() {
 	http.HandleFunc("/computer/versionControl", handleVersionControl)
 	http.HandleFunc("/ios/versionControl", handleVersionControl)
 	http.HandleFunc("/android/versionControl", handleVersionControl)
-	http.HandleFunc("/computer/submitCSV", handleSubmitCSV)
-	http.HandleFunc("/computer/submitFeedback", handleSubmitFeedback)
-	http.HandleFunc("/ios/submitFeedback", handleSubmitFeedback)
-	http.HandleFunc("/android/submitFeedback", handleSubmitFeedback)
 	http.HandleFunc("/android/updatePassword", handleUpdatePassword)
 	http.HandleFunc("/computer/updatePassword", handleUpdatePassword)
 	http.HandleFunc("/ios/updateAutoAccept", handleUpdateAutoAccept)
