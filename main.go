@@ -1291,7 +1291,7 @@ func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
 	req, err := http.NewRequest("POST", "http://dev.gameq.io:8080/"+sys+"/storeFeedback", nil)
 
 	form := url.Values{}
-	form.Add("device_id", di)
+	form.Add("device_id", strconv.FormatInt(di, 10))
 	form.Add("session_token", st)
 	form.Add("feedback", fb)
 	form.Add("key", r.Form.Get("key"))
