@@ -1274,8 +1274,38 @@ Sincerely,
 }
 
 func handleSubmitFeedback(w http.ResponseWriter, r *http.Request) {
+	// sys := strings.Split(r.URL.Path[1:], "/")[0]
+	// redirect(w, r, "http://dev.gameq.io:8080/"+sys+"/storeFeedback", 307)
+	r.ParseForm()
+	if !checkKey(r.Form.Get("key"), w) {
+		fmt.Fprintf(w, "jumpone")
+		return
+	}
+	di, err := strconv.ParseInt(r.Form.Get("device_id"), 10, 0)
+	st := r.Form.Get("session_token")
+	fb := r.Form.Get("feedback")
 	sys := strings.Split(r.URL.Path[1:], "/")[0]
-	redirect(w, r, "http://dev.gameq.io:8080/"+sys+"/storeFeedback", 307)
+
+	hc := http.Client{}
+	req, err := http.NewRequest("POST", "http://dev.gameq.io:8080/"+sys+"/storeFeedback", nil)
+
+	form := url.Values{}
+	form.Add("device_id", di)
+	form.Add("session_token", st)
+	form.Add("feedback", fb)
+	form.Add("key", r.Form.Get("key"))
+	req.PostForm = form
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := hc.Do(req)
+
+	defer resp.Body.Close()
+	contents, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintf(w, err.Error())
+	} else {
+		fmt.Fprintf(w, string(contents))
+	}
 	// director := func(req *http.Request) {
 	// 	fmt.Fprintf(w, "1")
 	// 	req = r
@@ -1438,7 +1468,7 @@ func checkKey(k string, w http.ResponseWriter) (bol bool) {
 		response := Response{
 			Success: 0,
 			Error:   "Invalid Key",
-			Debug:   "Invalid key",
+			Debug:   k,
 		}
 		json.NewEncoder(w).Encode(response)
 		return false
